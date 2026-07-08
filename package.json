@@ -1,5 +1,5 @@
 {
-  "name": "tmp",
+  "name": "@meu-projeto/root",
   "private": true,
   "scripts": {
     "build": "turbo run build",
