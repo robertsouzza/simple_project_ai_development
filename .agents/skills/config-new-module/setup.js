@@ -2,15 +2,22 @@
 /**
  * config-new-module — scaffolder determinístico de módulo de negócio
  *
- * Cria um novo módulo dentro de modules/<nome> com estrutura pré-definida,
- * registra a dependência nos apps frontend e backend, garante as entradas
- * necessárias no package.json raiz e roda install, build e testes.
+ * Dois modos:
+ *
+ * 1) Workspace (padrão) — cria modules/<nome> com estrutura de pacote npm,
+ *    registra dependência nos apps, ajusta root, roda install/build/test.
+ *
+ * 2) Backend Nest (--backend) — cria apps/backend/src/modules/<nome> com
+ *    <nome>.module.ts + <nome>.controller.ts (endpoint GET), registra o
+ *    módulo em AppModule e recompila o backend. Namespace é ignorado.
  *
  * Uso:
  *   node setup.js <nome-do-modulo> --namespace @scope [--force]
+ *   node setup.js <nome-do-modulo> --backend [--force]
  *
- * Exemplo:
+ * Exemplos:
  *   node setup.js pagamento --namespace @meu-projeto
+ *   node setup.js hello --backend
  */
 
 'use strict';
@@ -26,6 +33,7 @@ const argv = process.argv.slice(2);
 let moduleName = null;
 let namespace = null;
 let force = false;
+let backend = false;
 
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
@@ -33,9 +41,12 @@ for (let i = 0; i < argv.length; i++) {
     namespace = argv[++i];
   } else if (a === '--force' || a === '-f') {
     force = true;
+  } else if (a === '--backend' || a === '-b') {
+    backend = true;
   } else if (a === '--help' || a === '-h') {
     console.log(
-      'Uso: node setup.js <nome-do-modulo> --namespace @scope [--force]'
+      'Uso: node setup.js <nome-do-modulo> --namespace @scope [--force]\n' +
+        '   ou: node setup.js <nome-do-modulo> --backend [--force]'
     );
     process.exit(0);
   } else if (!a.startsWith('-')) {
@@ -67,19 +78,23 @@ if (!/^[a-z0-9][a-z0-9-]*$/.test(moduleName)) {
   process.exit(1);
 }
 
-if (!namespace) {
-  console.error(
-    'Erro: --namespace é obrigatório (ex.: --namespace @meu-projeto).'
-  );
-  process.exit(1);
-}
+// Namespace só é exigido no modo workspace (padrão).
+// No modo --backend ele não faz sentido e é ignorado se passado.
+if (!backend) {
+  if (!namespace) {
+    console.error(
+      'Erro: --namespace é obrigatório (ex.: --namespace @meu-projeto).'
+    );
+    process.exit(1);
+  }
 
-if (!/^@[a-z0-9][a-z0-9._-]*$/i.test(namespace)) {
-  console.error(
-    `Erro: namespace inválido "${namespace}". ` +
-      `Deve começar com @ (ex.: @meu-projeto).`
-  );
-  process.exit(1);
+  if (!/^@[a-z0-9][a-z0-9._-]*$/i.test(namespace)) {
+    console.error(
+      `Erro: namespace inválido "${namespace}". ` +
+        `Deve começar com @ (ex.: @meu-projeto).`
+    );
+    process.exit(1);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -142,6 +157,15 @@ if (!fs.existsSync(rootPkgPath)) {
       `Rode a partir da raiz do monorepo.`
   );
   process.exit(1);
+}
+
+// ---------------------------------------------------------------------------
+// Dispatch: modo --backend cai fora aqui; o resto do arquivo é o fluxo
+// workspace original (não alterado).
+// ---------------------------------------------------------------------------
+if (backend) {
+  runBackendMode();
+  process.exit(0);
 }
 
 const assetsDir = path.join(__dirname, 'assets');
@@ -306,3 +330,133 @@ run(`npm test -w ${depName}`, { cwd });
 // ---------------------------------------------------------------------------
 console.log(`\n✓ Módulo "${depName}" criado em modules/${moduleName}/`);
 console.log(`  Registrado como dependência em apps/frontend e apps/backend.`);
+
+// ===========================================================================
+// Modo --backend: cria módulo Nest em apps/backend/src/modules/<nome>/
+// ===========================================================================
+function runBackendMode() {
+  const backendDir = path.join(cwd, 'apps', 'backend');
+  const backendSrc = path.join(backendDir, 'src');
+  const appModulePath = path.join(backendSrc, 'app.module.ts');
+  const targetDir = path.join(backendSrc, 'modules', moduleName);
+
+  if (!fs.existsSync(backendDir)) {
+    console.error(`Erro: apps/backend/ não encontrado em ${cwd}.`);
+    process.exit(1);
+  }
+  if (!fs.existsSync(appModulePath)) {
+    console.error(`Erro: ${path.relative(cwd, appModulePath)} não encontrado.`);
+    process.exit(1);
+  }
+
+  if (fs.existsSync(targetDir)) {
+    const entries = fs.readdirSync(targetDir);
+    if (entries.length > 0 && !force) {
+      console.error(
+        `Erro: ${path.relative(cwd, targetDir)} já existe e não está vazio. ` +
+          `Use --force para sobrescrever.`
+      );
+      process.exit(1);
+    }
+    if (force) {
+      console.log(
+        `    ! removendo conteúdo existente: ${path.relative(cwd, targetDir)}`
+      );
+      fs.rmSync(targetDir, { recursive: true, force: true });
+    }
+  }
+
+  const pascal = toPascalCase(moduleName);
+  const moduleClass = `${pascal}Module`;
+  const controllerClass = `${pascal}Controller`;
+
+  header(`Criando módulo Nest apps/backend/src/modules/${moduleName}`);
+  fs.mkdirSync(targetDir, { recursive: true });
+
+  const moduleTs = `import { Module } from '@nestjs/common';
+import { ${controllerClass} } from './${moduleName}.controller';
+
+@Module({
+  controllers: [${controllerClass}],
+})
+export class ${moduleClass} {}
+`;
+
+  const controllerTs = `import { Controller, Get } from '@nestjs/common';
+
+@Controller('${moduleName}')
+export class ${controllerClass} {
+  @Get('/')
+  get${pascal}() {
+    return { message: '${pascal} endpoint' };
+  }
+}
+`;
+
+  writeFileEnsure(path.join(targetDir, `${moduleName}.module.ts`), moduleTs);
+  writeFileEnsure(
+    path.join(targetDir, `${moduleName}.controller.ts`),
+    controllerTs
+  );
+
+  header('Registrando módulo em app.module.ts');
+  registerInAppModule(appModulePath, moduleClass, moduleName);
+
+  header('Recompilando backend');
+  run('npm run build', { cwd: backendDir });
+
+  console.log(`\n✓ Módulo Nest "${moduleClass}" criado.`);
+  console.log(
+    `  Endpoint disponível ao subir o backend: GET http://localhost:4000/${moduleName}`
+  );
+}
+
+function toPascalCase(kebab) {
+  return kebab
+    .split('-')
+    .filter(Boolean)
+    .map((w) => w[0].toUpperCase() + w.slice(1))
+    .join('');
+}
+
+function registerInAppModule(appModulePath, moduleClass, moduleName) {
+  const importLine =
+    `import { ${moduleClass} } from './modules/${moduleName}/${moduleName}.module';`;
+
+  let content = fs.readFileSync(appModulePath, 'utf8');
+
+  if (content.includes(importLine)) {
+    console.log(`    = ${moduleClass} já registrado — nada a fazer`);
+    return;
+  }
+
+  // 1) Insere o import logo após o último import existente.
+  const importMatches = [...content.matchAll(/^import .*?;$/gm)];
+  if (importMatches.length === 0) {
+    console.error('Erro: nenhum import encontrado em app.module.ts.');
+    process.exit(1);
+  }
+  const last = importMatches[importMatches.length - 1];
+  const insertAt = last.index + last[0].length;
+  content = content.slice(0, insertAt) + '\n' + importLine + content.slice(insertAt);
+
+  // 2) Adiciona o modClass dentro do bloco imports: [...] do @Module.
+  const importsBlock = /(imports:\s*\[)([\s\S]*?)(\n\s*\])/;
+  const m = content.match(importsBlock);
+  if (!m) {
+    console.error(
+      'Erro: bloco "imports: [...]" não encontrado no decorator @Module.'
+    );
+    process.exit(1);
+  }
+  const [full, open, inner, close] = m;
+  const trimmed = inner.replace(/\s+$/, '');
+  const needsComma = trimmed.length > 0 && !trimmed.endsWith(',');
+  const newInner = inner + (needsComma ? ',' : '') + `\n    ${moduleClass},`;
+  content = content.replace(full, open + newInner + close);
+
+  fs.writeFileSync(appModulePath, content);
+  console.log(
+    `    ~ ${path.relative(cwd, appModulePath)}: registrado ${moduleClass}`
+  );
+}

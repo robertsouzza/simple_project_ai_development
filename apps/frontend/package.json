@@ -14,7 +14,8 @@
     "react-dom": "19.2.4",
     "@meu-projeto/pagamento": "*",
     "@meu-projeto/transactions": "*",
-    "@meu-projeto/auth": "*"
+    "@meu-projeto/auth": "*",
+    "@meu-projeto/reports": "*"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
