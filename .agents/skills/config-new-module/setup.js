@@ -2,7 +2,7 @@
 /**
  * config-new-module — scaffolder determinístico de módulo de negócio
  *
- * Dois modos:
+ * Três modos:
  *
  * 1) Workspace (padrão) — cria modules/<nome> com estrutura de pacote npm,
  *    registra dependência nos apps, ajusta root, roda install/build/test.
@@ -11,13 +11,20 @@
  *    <nome>.module.ts + <nome>.controller.ts (endpoint GET), registra o
  *    módulo em AppModule e recompila o backend. Namespace é ignorado.
  *
+ * 3) Frontend Next (--frontend) — cria a rota privada em
+ *    apps/frontend/src/app/(private)/<nome>/page.tsx e o módulo em
+ *    apps/frontend/src/app/modules/<nome>/{pages,components}/, recompila
+ *    o frontend. Namespace é ignorado.
+ *
  * Uso:
  *   node setup.js <nome-do-modulo> --namespace @scope [--force]
  *   node setup.js <nome-do-modulo> --backend [--force]
+ *   node setup.js <nome-do-modulo> --frontend [--force]
  *
  * Exemplos:
  *   node setup.js pagamento --namespace @meu-projeto
  *   node setup.js hello --backend
+ *   node setup.js hello --frontend
  */
 
 'use strict';
@@ -34,6 +41,7 @@ let moduleName = null;
 let namespace = null;
 let force = false;
 let backend = false;
+let frontend = false;
 
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
@@ -43,10 +51,13 @@ for (let i = 0; i < argv.length; i++) {
     force = true;
   } else if (a === '--backend' || a === '-b') {
     backend = true;
+  } else if (a === '--frontend' || a === '-F') {
+    frontend = true;
   } else if (a === '--help' || a === '-h') {
     console.log(
       'Uso: node setup.js <nome-do-modulo> --namespace @scope [--force]\n' +
-        '   ou: node setup.js <nome-do-modulo> --backend [--force]'
+        '   ou: node setup.js <nome-do-modulo> --backend [--force]\n' +
+        '   ou: node setup.js <nome-do-modulo> --frontend [--force]'
     );
     process.exit(0);
   } else if (!a.startsWith('-')) {
@@ -78,9 +89,19 @@ if (!/^[a-z0-9][a-z0-9-]*$/.test(moduleName)) {
   process.exit(1);
 }
 
+// --backend e --frontend são mutuamente exclusivos: cada invocação cuida de
+// um destino só. Para os dois, rode a skill duas vezes.
+if (backend && frontend) {
+  console.error(
+    'Erro: --backend e --frontend são mutuamente exclusivos. ' +
+      'Rode a skill uma vez para cada modo.'
+  );
+  process.exit(1);
+}
+
 // Namespace só é exigido no modo workspace (padrão).
-// No modo --backend ele não faz sentido e é ignorado se passado.
-if (!backend) {
+// Nos modos --backend / --frontend ele não faz sentido e é ignorado se passado.
+if (!backend && !frontend) {
   if (!namespace) {
     console.error(
       'Erro: --namespace é obrigatório (ex.: --namespace @meu-projeto).'
@@ -160,11 +181,16 @@ if (!fs.existsSync(rootPkgPath)) {
 }
 
 // ---------------------------------------------------------------------------
-// Dispatch: modo --backend cai fora aqui; o resto do arquivo é o fluxo
-// workspace original (não alterado).
+// Dispatch: --backend e --frontend caem fora aqui; o resto do arquivo é o
+// fluxo workspace original (não alterado).
 // ---------------------------------------------------------------------------
 if (backend) {
   runBackendMode();
+  process.exit(0);
+}
+
+if (frontend) {
+  runFrontendMode();
   process.exit(0);
 }
 
@@ -417,6 +443,100 @@ function toPascalCase(kebab) {
     .filter(Boolean)
     .map((w) => w[0].toUpperCase() + w.slice(1))
     .join('');
+}
+
+// ===========================================================================
+// Modo --frontend: cria rota privada + páginas/componentes em
+// apps/frontend/src/app/(private)/<nome>/  e
+// apps/frontend/src/app/modules/<nome>/
+// ===========================================================================
+function runFrontendMode() {
+  const frontendDir = path.join(cwd, 'apps', 'frontend');
+  const appDir = path.join(frontendDir, 'src', 'app');
+  const privateRouteDir = path.join(appDir, '(private)', moduleName);
+  const moduleRoot = path.join(appDir, 'modules', moduleName);
+  const pagesDir = path.join(moduleRoot, 'pages');
+  const componentsDir = path.join(moduleRoot, 'components');
+
+  if (!fs.existsSync(frontendDir)) {
+    console.error(`Erro: apps/frontend/ não encontrado em ${cwd}.`);
+    process.exit(1);
+  }
+  if (!fs.existsSync(appDir)) {
+    console.error(
+      `Erro: ${path.relative(cwd, appDir)} não encontrado ` +
+        `(esperado App Router do Next em src/app).`
+    );
+    process.exit(1);
+  }
+
+  for (const dir of [privateRouteDir, moduleRoot]) {
+    if (fs.existsSync(dir)) {
+      const entries = fs.readdirSync(dir);
+      if (entries.length > 0 && !force) {
+        console.error(
+          `Erro: ${path.relative(cwd, dir)} já existe e não está vazio. ` +
+            `Use --force para sobrescrever.`
+        );
+        process.exit(1);
+      }
+      if (force) {
+        console.log(
+          `    ! removendo conteúdo existente: ${path.relative(cwd, dir)}`
+        );
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    }
+  }
+
+  const pascal = toPascalCase(moduleName);
+  const pageClass = `${pascal}Page`;
+  const componentClass = `${pascal}Component`;
+  const routeClass = `${pascal}RoutePage`;
+
+  header(
+    `Criando módulo frontend apps/frontend/src/app/modules/${moduleName}`
+  );
+  fs.mkdirSync(privateRouteDir, { recursive: true });
+  fs.mkdirSync(pagesDir, { recursive: true });
+  fs.mkdirSync(componentsDir, { recursive: true });
+
+  const routePageTsx = `import ${pageClass} from "@/app/modules/${moduleName}/pages/${moduleName}.page";
+
+export default function ${routeClass}() {
+  return <${pageClass} />;
+}
+`;
+
+  const pageTsx = `import ${componentClass} from "../components/${moduleName}.component";
+
+export default function ${pageClass}() {
+  return <${componentClass} />;
+}
+`;
+
+  const componentTsx = `export default function ${componentClass}() {
+  return <div>${pascal} Component</div>;
+}
+`;
+
+  writeFileEnsure(path.join(privateRouteDir, 'page.tsx'), routePageTsx);
+  writeFileEnsure(
+    path.join(pagesDir, `${moduleName}.page.tsx`),
+    pageTsx
+  );
+  writeFileEnsure(
+    path.join(componentsDir, `${moduleName}.component.tsx`),
+    componentTsx
+  );
+
+  header('Recompilando frontend');
+  run('npm run build', { cwd: frontendDir });
+
+  console.log(`\n✓ Módulo frontend "${pascal}" criado.`);
+  console.log(
+    `  Rota privada disponível ao subir o frontend: http://localhost:3000/${moduleName}`
+  );
 }
 
 function registerInAppModule(appModulePath, moduleClass, moduleName) {
