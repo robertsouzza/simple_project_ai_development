@@ -30,7 +30,8 @@
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "@poupig/auth": "*",
-    "@poupig/reports": "*"
+    "@poupig/reports": "*",
+    "@poupig/transactions": "*"
   },
   "devDependencies": {
     "@nestjs/cli": "^12.0.0",
