@@ -400,7 +400,7 @@ function runBackendMode() {
   fs.mkdirSync(targetDir, { recursive: true });
 
   const moduleTs = `import { Module } from '@nestjs/common';
-import { ${controllerClass} } from './${moduleName}.controller';
+import { ${controllerClass} } from './${moduleName}.controller.js';
 
 @Module({
   controllers: [${controllerClass}],
@@ -541,7 +541,7 @@ export default function ${pageClass}() {
 
 function registerInAppModule(appModulePath, moduleClass, moduleName) {
   const importLine =
-    `import { ${moduleClass} } from './modules/${moduleName}/${moduleName}.module';`;
+    `import { ${moduleClass} } from './modules/${moduleName}/${moduleName}.module.js';`;
 
   let content = fs.readFileSync(appModulePath, 'utf8');
 
