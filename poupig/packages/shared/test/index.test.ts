@@ -7,19 +7,22 @@ import {
 } from '../src/index';
 
 describe('errors', () => {
-  test('DomainError herda de Error e tem statusCode 500 por padrão', () => {
+  test('DomainError herda de Error e tem statusCode 400 por padrão', () => {
     const err = new DomainError('base');
     expect(err).toBeInstanceOf(Error);
     expect(err.message).toBe('base');
     expect(err.name).toBe('DomainError');
-    expect(err.statusCode).toBe(500);
+    expect(err.statusCode).toBe(400);
   });
 
-  test('ValidationError tem statusCode 422 e herda de DomainError', () => {
-    const err = new ValidationError('invalid');
+  test('ValidationError tem statusCode 422 e expõe fullCode', () => {
+    const err = new ValidationError('user.email', 'invalid.email');
     expect(err).toBeInstanceOf(DomainError);
     expect(err.name).toBe('ValidationError');
     expect(err.statusCode).toBe(422);
+    expect(err.fieldCode).toBe('user.email');
+    expect(err.errorCode).toBe('invalid.email');
+    expect(err.fullCode).toBe('user.email.invalid.email');
   });
 
   test('NotFoundError tem statusCode 404 e herda de DomainError', () => {
