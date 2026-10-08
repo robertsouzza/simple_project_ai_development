@@ -14,7 +14,8 @@
     "react-dom": "19.2.8",
     "@poupig/auth": "*",
     "@poupig/reports": "*",
-    "@poupig/transactions": "*"
+    "@poupig/transactions": "*",
+    "@poupig/shared": "*"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
