@@ -17,47 +17,41 @@ describe('rules', () => {
   describe('RequiredRule', () => {
     const rule = new RequiredRule();
     test.each([
-      ['valor', true],
-      ['', false],
-      ['   ', false],
-      [null, false],
-      [undefined, false],
-      [0, true],
-      [false, true],
+      ['valor', null],
+      ['', 'required'],
+      ['   ', 'required'],
+      [null, 'required'],
+      [undefined, 'required'],
+      [0, null],
+      [false, null],
     ])('%p → %p', (value, expected) => {
       expect(rule.validate(value)).toBe(expected);
-    });
-    test('errorCode é "required"', () => {
-      expect(rule.errorCode).toBe('required');
     });
   });
 
   describe('EmailRule', () => {
     const rule = new EmailRule();
     test.each([
-      ['user@example.com', true],
-      ['a.b+c@sub.dom.io', true],
-      ['sem-arroba', false],
-      ['user@', false],
-      ['@example.com', false],
-      ['user@com', false],
-      [null, false],
+      ['user@example.com', null],
+      ['a.b+c@sub.dom.io', null],
+      ['sem-arroba', 'invalid.email'],
+      ['user@', 'invalid.email'],
+      ['@example.com', 'invalid.email'],
+      ['user@com', 'invalid.email'],
+      [null, 'invalid.email'],
     ])('%p → %p', (value, expected) => {
       expect(rule.validate(value)).toBe(expected);
-    });
-    test('errorCode é "invalid.email"', () => {
-      expect(rule.errorCode).toBe('invalid.email');
     });
   });
 
   describe('MinLengthRule', () => {
     const rule = new MinLengthRule(3);
     test.each([
-      ['abc', true],
-      ['abcd', true],
-      ['ab', false],
-      ['', false],
-      [null, false],
+      ['abc', null],
+      ['abcd', null],
+      ['ab', 'min.length'],
+      ['', 'min.length'],
+      [null, 'min.length'],
     ])('%p → %p', (value, expected) => {
       expect(rule.validate(value)).toBe(expected);
     });
@@ -66,10 +60,10 @@ describe('rules', () => {
   describe('MaxLengthRule', () => {
     const rule = new MaxLengthRule(3);
     test.each([
-      ['abc', true],
-      ['ab', true],
-      ['abcd', false],
-      [null, false],
+      ['abc', null],
+      ['ab', null],
+      ['abcd', 'max.length'],
+      [null, 'max.length'],
     ])('%p → %p', (value, expected) => {
       expect(rule.validate(value)).toBe(expected);
     });
@@ -78,11 +72,11 @@ describe('rules', () => {
   describe('RangeLengthRule', () => {
     const rule = new RangeLengthRule(2, 4);
     test.each([
-      ['ab', true],
-      ['abc', true],
-      ['abcd', true],
-      ['a', false],
-      ['abcde', false],
+      ['ab', null],
+      ['abc', null],
+      ['abcd', null],
+      ['a', 'range.length'],
+      ['abcde', 'range.length'],
     ])('%p → %p', (value, expected) => {
       expect(rule.validate(value)).toBe(expected);
     });
@@ -90,33 +84,33 @@ describe('rules', () => {
 
   describe('DateRule', () => {
     const rule = new DateRule();
-    test('Date válida passa', () => {
-      expect(rule.validate(new Date())).toBe(true);
+    test('Date válida → null', () => {
+      expect(rule.validate(new Date())).toBeNull();
     });
-    test('Date inválida falha', () => {
-      expect(rule.validate(new Date('abacaxi'))).toBe(false);
+    test('Date inválida → invalid.date', () => {
+      expect(rule.validate(new Date('abacaxi'))).toBe('invalid.date');
     });
-    test('string ISO passa', () => {
-      expect(rule.validate('2026-01-15')).toBe(true);
+    test('string ISO → null', () => {
+      expect(rule.validate('2026-01-15')).toBeNull();
     });
-    test('string lixo falha', () => {
-      expect(rule.validate('not-a-date')).toBe(false);
+    test('string lixo → invalid.date', () => {
+      expect(rule.validate('not-a-date')).toBe('invalid.date');
     });
-    test('tipo incompatível falha', () => {
-      expect(rule.validate({})).toBe(false);
+    test('tipo incompatível → invalid.date', () => {
+      expect(rule.validate({})).toBe('invalid.date');
     });
   });
 
   describe('AgeRule', () => {
     const rule = new AgeRule(18, 65);
     test.each([
-      [18, true],
-      [65, true],
-      [30, true],
-      [17, false],
-      [66, false],
-      ['30', false],
-      [NaN, false],
+      [18, null],
+      [65, null],
+      [30, null],
+      [17, 'invalid.age'],
+      [66, 'invalid.age'],
+      ['30', 'invalid.age'],
+      [NaN, 'invalid.age'],
     ])('%p → %p', (value, expected) => {
       expect(rule.validate(value)).toBe(expected);
     });
@@ -124,30 +118,62 @@ describe('rules', () => {
 });
 
 describe('Validator', () => {
-  test('retorna [] quando todas as regras passam', () => {
-    const v = new Validator('user.name', [
-      new RequiredRule(),
-      new MinLengthRule(3),
+  test('retorna [] quando todos os campos passam', () => {
+    const errors = new Validator().validate([
+      {
+        fieldCode: 'user.email',
+        value: 'robert@example.com',
+        rules: [new RequiredRule(), new EmailRule()],
+      },
+      {
+        fieldCode: 'user.name',
+        value: 'Roberto',
+        rules: [new RequiredRule(), new MinLengthRule(3)],
+      },
     ]);
-    expect(v.validate('Roberto')).toEqual([]);
+    expect(errors).toEqual([]);
   });
 
-  test('agrega todos os erros, não para no primeiro', () => {
-    const v = new Validator('user.name', [
-      new RequiredRule(),
-      new MinLengthRule(3),
-      new MaxLengthRule(10),
+  test('agrega erros de múltiplos campos de uma só entidade', () => {
+    const errors = new Validator().validate([
+      {
+        fieldCode: 'user.email',
+        value: 'nao-eh-email',
+        rules: [new RequiredRule(), new EmailRule()],
+      },
+      {
+        fieldCode: 'user.name',
+        value: '',
+        rules: [new RequiredRule(), new MinLengthRule(3)],
+      },
+      {
+        fieldCode: 'user.age',
+        value: 15,
+        rules: [new AgeRule(18, 99)],
+      },
     ]);
-    const errors = v.validate('');
-    expect(errors).toHaveLength(2);
+    expect(errors.map((e) => e.fullCode)).toEqual([
+      'user.email.invalid.email',
+      'user.name.required',
+      'user.name.min.length',
+      'user.age.invalid.age',
+    ]);
+  });
+
+  test('não para no primeiro erro dentro de um único campo', () => {
+    const errors = new Validator().validate([
+      {
+        fieldCode: 'user.name',
+        value: '',
+        rules: [new RequiredRule(), new MinLengthRule(3), new MaxLengthRule(10)],
+      },
+    ]);
     expect(errors.map((e) => e.errorCode)).toEqual(['required', 'min.length']);
     expect(errors.every((e) => e.fieldCode === 'user.name')).toBe(true);
   });
 
-  test('fullCode compõe fieldCode + errorCode', () => {
-    const v = new Validator('user.email', [new EmailRule()]);
-    const [err] = v.validate('invalido');
-    expect(err?.fullCode).toBe('user.email.invalid.email');
+  test('lista vazia de campos → sem erros', () => {
+    expect(new Validator().validate([])).toEqual([]);
   });
 });
 

@@ -1,12 +1,12 @@
-import { ValidationRule } from '../validation-rule';
+import { ValidationRule } from '../validation-rule.interface';
 
 export class MaxLengthRule implements ValidationRule {
-  public readonly errorCode = 'max.length';
-
   constructor(private readonly max: number) {}
 
-  validate(value: unknown): boolean {
-    if (typeof value !== 'string') return false;
-    return value.length <= this.max;
+  validate(value: unknown): string | null {
+    if (typeof value !== 'string' || value.length > this.max) {
+      return 'max.length';
+    }
+    return null;
   }
 }

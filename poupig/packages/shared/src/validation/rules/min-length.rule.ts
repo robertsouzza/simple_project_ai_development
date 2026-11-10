@@ -1,12 +1,12 @@
-import { ValidationRule } from '../validation-rule';
+import { ValidationRule } from '../validation-rule.interface';
 
 export class MinLengthRule implements ValidationRule {
-  public readonly errorCode = 'min.length';
-
   constructor(private readonly min: number) {}
 
-  validate(value: unknown): boolean {
-    if (typeof value !== 'string') return false;
-    return value.length >= this.min;
+  validate(value: unknown): string | null {
+    if (typeof value !== 'string' || value.length < this.min) {
+      return 'min.length';
+    }
+    return null;
   }
 }

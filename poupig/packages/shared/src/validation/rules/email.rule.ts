@@ -1,12 +1,12 @@
-import { ValidationRule } from '../validation-rule';
+import { ValidationRule } from '../validation-rule.interface';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export class EmailRule implements ValidationRule {
-  public readonly errorCode = 'invalid.email';
-
-  validate(value: unknown): boolean {
-    if (typeof value !== 'string') return false;
-    return EMAIL_REGEX.test(value);
+  validate(value: unknown): string | null {
+    if (typeof value !== 'string' || !EMAIL_REGEX.test(value)) {
+      return 'invalid.email';
+    }
+    return null;
   }
 }

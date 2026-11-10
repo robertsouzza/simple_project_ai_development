@@ -1,17 +1,21 @@
 import { ValidationError } from '../error/validation.error';
-import { ValidationRule } from './validation-rule';
+import { ValidationRule } from './validation-rule.interface';
+
+export interface FieldValidation {
+  fieldCode: string;
+  value: unknown;
+  rules: ValidationRule[];
+}
 
 export class Validator {
-  constructor(
-    public readonly fieldCode: string,
-    public readonly rules: ValidationRule[]
-  ) {}
-
-  validate(value: unknown): ValidationError[] {
+  validate(fields: FieldValidation[]): ValidationError[] {
     const errors: ValidationError[] = [];
-    for (const rule of this.rules) {
-      if (!rule.validate(value)) {
-        errors.push(new ValidationError(this.fieldCode, rule.errorCode));
+    for (const field of fields) {
+      for (const rule of field.rules) {
+        const errorCode = rule.validate(field.value);
+        if (errorCode !== null) {
+          errors.push(new ValidationError(field.fieldCode, errorCode));
+        }
       }
     }
     return errors;

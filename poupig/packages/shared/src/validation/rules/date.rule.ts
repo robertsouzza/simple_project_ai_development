@@ -1,14 +1,14 @@
-import { ValidationRule } from '../validation-rule';
+import { ValidationRule } from '../validation-rule.interface';
 
 export class DateRule implements ValidationRule {
-  public readonly errorCode = 'invalid.date';
-
-  validate(value: unknown): boolean {
-    if (value instanceof Date) return !Number.isNaN(value.getTime());
+  validate(value: unknown): string | null {
+    if (value instanceof Date) {
+      return Number.isNaN(value.getTime()) ? 'invalid.date' : null;
+    }
     if (typeof value === 'string' || typeof value === 'number') {
       const parsed = new Date(value);
-      return !Number.isNaN(parsed.getTime());
+      return Number.isNaN(parsed.getTime()) ? 'invalid.date' : null;
     }
-    return false;
+    return 'invalid.date';
   }
 }

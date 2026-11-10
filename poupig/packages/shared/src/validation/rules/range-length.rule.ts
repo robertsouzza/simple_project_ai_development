@@ -1,15 +1,19 @@
-import { ValidationRule } from '../validation-rule';
+import { ValidationRule } from '../validation-rule.interface';
 
 export class RangeLengthRule implements ValidationRule {
-  public readonly errorCode = 'range.length';
-
   constructor(
     private readonly min: number,
     private readonly max: number
   ) {}
 
-  validate(value: unknown): boolean {
-    if (typeof value !== 'string') return false;
-    return value.length >= this.min && value.length <= this.max;
+  validate(value: unknown): string | null {
+    if (
+      typeof value !== 'string' ||
+      value.length < this.min ||
+      value.length > this.max
+    ) {
+      return 'range.length';
+    }
+    return null;
   }
 }
